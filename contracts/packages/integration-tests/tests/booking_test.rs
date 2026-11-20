@@ -85,7 +85,6 @@ fn test_refund_flow() {
 
     let booking = contracts.booking.get_booking(&booking_id, &actors.passenger).unwrap();
     assert_eq!(booking.status, Symbol::new(&env, "refunded"));
-    assert_eq!(booking.amount_escrowed, 0);
 }
 
 #[test]

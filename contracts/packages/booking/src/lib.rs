@@ -325,16 +325,22 @@ impl BookingContract {
     // # Arguments
     // * `booking_id` - The booking ID whose TTL should be renewed
     pub fn renew_booking_ttl(env: Env, booking_id: u64) {
-        let mut booking = BookingStorage::get(&env, booking_id).expect("Booking not found");
+        let booking = BookingStorage::get(&env, booking_id).expect("Booking not found");
         booking.passenger.require_auth();
         env.storage()
             .persistent()
             .extend_ttl(&booking_id, /* delta = */ 0);
     }
 
-    // Helper to get booking details
-    pub fn get_booking(env: Env, booking_id: u64) -> Option<Booking> {
-        BookingStorage::get(&env, booking_id)
+    // Helper to get booking details with ownership/authorization check
+    pub fn get_booking(env: Env, booking_id: u64, caller: Address) -> Option<Booking> {
+        caller.require_auth();
+        let booking = BookingStorage::get(&env, booking_id)?;
+        assert!(
+            caller == booking.passenger || caller == booking.airline,
+            "Not authorized to view booking"
+        );
+        Some(booking)
     }
 
     // Original API wrappers for backward compatibility

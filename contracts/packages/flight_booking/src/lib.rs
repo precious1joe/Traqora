@@ -90,10 +90,15 @@ impl FlightBookingContract {
         booking_id
     }
 
-    pub fn get_booking(env: Env, booking_id: u64) -> Option<Booking> {
-        env.storage()
+    pub fn get_booking(env: Env, booking_id: u64, caller: Address) -> Option<Booking> {
+        caller.require_auth();
+        let booking = env.storage()
             .persistent()
-            .get(&DataKey::Booking(booking_id))
+            .get(&DataKey::Booking(booking_id));
+        if let Some(ref b) = booking {
+            assert!(caller == b.passenger, "Unauthorized to view booking");
+        }
+        booking
     }
 
     pub fn init_upgrade_owner(env: Env, owner: Address) {

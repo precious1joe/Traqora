@@ -333,12 +333,7 @@ impl BookingContract {
     }
 
     // Helper to get booking details
-    pub fn get_booking(env: Env, booking_id: u64) -> Option<Booking> {
-        BookingStorage::get(&env, booking_id)
-    }
-
-    // Helper to get booking details with ownership/authorization check
-    pub fn get_booking_auth(env: Env, booking_id: u64, caller: Address) -> Option<Booking> {
+    pub fn get_booking(env: Env, booking_id: u64, caller: Address) -> Option<Booking> {
         caller.require_auth();
         let booking = BookingStorage::get(&env, booking_id)?;
         assert!(

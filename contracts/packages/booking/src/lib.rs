@@ -332,9 +332,25 @@ impl BookingContract {
             .extend_ttl(&booking_id, /* delta = */ 0);
     }
 
-    // Helper to get booking details
+    // Helper to get booking details with ownership/caller check
     pub fn get_booking(env: Env, booking_id: u64) -> Option<Booking> {
-        BookingStorage::get(&env, booking_id)
+        let booking = BookingStorage::get(&env, booking_id)?;
+        // Caller must be either the passenger or the airline associated with the booking
+        let caller = env.current_contract_address(); // or require auth from passenger/airline
+                                                     // If not calling internally or with appropriate auth, require passenger or airline auth
+                                                     // To ensure any external view caller cannot guess arbitrary IDs, require authorization:
+                                                     // Either booking.passenger or booking.airline must require_auth()
+        if env
+            .invoker()
+            .try_into()
+            .map(|addr: Address| addr == booking.passenger || addr == booking.airline)
+            .unwrap_or(false)
+        {
+            // authorized
+        } else {
+            booking.passenger.require_auth();
+        }
+        Some(booking)
     }
 
     // Original API wrappers for backward compatibility

@@ -87,3 +87,36 @@ fn test_refund_flow() {
     assert_eq!(booking.status, Symbol::new(&env, "refunded"));
     assert_eq!(booking.amount_escrowed, 0);
 }
+
+#[test]
+fn test_booking_ownership_checks_on_views() {
+    let env = new_env();
+    let actors = generate_actors(&env);
+    let contracts = register_contracts(&env);
+    initialize_token(&env, &contracts.token, &actors.admin);
+
+    let price = 100_0000000i128;
+    let booking_id = contracts.booking.create_booking(
+        &actors.passenger,
+        &actors.airline,
+        &Symbol::new(&env, "FL123"),
+        &Symbol::new(&env, "JFK"),
+        &Symbol::new(&env, "LAX"),
+        &1704067200,
+        &price,
+        &contracts.token.address,
+    );
+
+    // Authorized passenger can retrieve booking
+    let booking = contracts.booking.get_booking(&booking_id);
+    assert!(booking.is_some());
+
+    // Authorized airline can retrieve booking
+    let airline_client = booking::BookingContractClient::new(&env, &contracts.booking.address);
+    env.mock_auths(&[soroban_sdk::testutils::AuthorizedAuth {
+        address: actors.airline.clone(),
+        sub_invocations: &[],
+    }]);
+    let booking_airline = airline_client.get_booking(&booking_id);
+    assert!(booking_airline.is_some());
+}

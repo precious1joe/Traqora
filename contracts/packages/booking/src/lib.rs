@@ -333,7 +333,16 @@ impl BookingContract {
     }
 
     // Helper to get booking details
-    pub fn get_booking(env: Env, booking_id: u64) -> Option<Booking> {
+    pub fn get_booking(env: Env, booking_id: u64, viewer: Address) -> Option<Booking> {
+        viewer.require_auth();
+        let booking = Self::get_booking_internal(&env, booking_id)?;
+        if booking.passenger != viewer && booking.airline != viewer {
+            panic!("Unauthorized: viewer does not own this booking");
+        }
+        Some(booking)
+    }
+
+    pub fn get_booking_internal(env: &Env, booking_id: u64) -> Option<Booking> {
         BookingStorage::get(&env, booking_id)
     }
 
@@ -560,6 +569,11 @@ impl BookingContract {
                 released_amount,
             ),
         );
+    }
+
+    #[cfg(test)]
+    pub fn test_get_booking_auth(env: Env, booking_id: u64, viewer: Address) -> Option<Booking> {
+        Self::get_booking(env, booking_id, viewer)
     }
 
     // Oracle-triggered refund: called by the oracle contract after airline cancellation consensus

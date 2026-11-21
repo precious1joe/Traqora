@@ -332,9 +332,15 @@ impl BookingContract {
             .extend_ttl(&booking_id, /* delta = */ 0);
     }
 
-    // Helper to get booking details
+    // Helper to get booking details with ownership check
     pub fn get_booking(env: Env, booking_id: u64) -> Option<Booking> {
-        BookingStorage::get(&env, booking_id)
+        let booking = BookingStorage::get(&env, booking_id)?;
+        if booking.passenger == env.current_contract_address() {
+            // If called internally or if we want to allow contract self-calls
+        } else {
+            booking.passenger.require_auth();
+        }
+        Some(booking)
     }
 
     // Original API wrappers for backward compatibility

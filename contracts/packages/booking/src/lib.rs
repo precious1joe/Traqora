@@ -332,9 +332,15 @@ impl BookingContract {
             .extend_ttl(&booking_id, /* delta = */ 0);
     }
 
-    // Helper to get booking details
-    pub fn get_booking(env: Env, booking_id: u64) -> Option<Booking> {
-        BookingStorage::get(&env, booking_id)
+    // Helper to get booking details with authorization check (passenger or airline)
+    pub fn get_booking(env: Env, viewer: Address, booking_id: u64) -> Option<Booking> {
+        viewer.require_auth();
+        let booking = BookingStorage::get(&env, booking_id)?;
+        assert!(
+            viewer == booking.passenger || viewer == booking.airline,
+            "Not authorized to view booking"
+        );
+        Some(booking)
     }
 
     // Original API wrappers for backward compatibility

@@ -22,7 +22,8 @@ fn test_payment_escrow_flow() {
         &contracts.token.address,
     );
 
-    let booking = contracts.booking.get_booking(&booking_id).unwrap();
+    env.mock_all_auths();
+    let booking = contracts.booking.get_booking(&actors.passenger, &booking_id).unwrap();
     assert_eq!(booking.status, Symbol::new(&env, "pending"));
     assert_eq!(booking.amount_escrowed, 0);
 
@@ -32,7 +33,7 @@ fn test_payment_escrow_flow() {
         .mint(&actors.admin, &actors.passenger, &price);
     contracts.booking.pay_for_booking(&booking_id);
 
-    let booking = contracts.booking.get_booking(&booking_id).unwrap();
+    let booking = contracts.booking.get_booking(&actors.passenger, &booking_id).unwrap();
     assert_eq!(booking.status, Symbol::new(&env, "confirmed"));
     assert_eq!(booking.amount_escrowed, price);
     assert_eq!(contracts.token.balance_of(&actors.passenger), 0);
@@ -45,7 +46,7 @@ fn test_payment_escrow_flow() {
     // 3. Release escrow to the airline after fulfillment.
     contracts.booking.release_payment_to_airline(&booking_id);
 
-    let booking = contracts.booking.get_booking(&booking_id).unwrap();
+    let booking = contracts.booking.get_booking(&actors.passenger, &booking_id).unwrap();
     assert_eq!(booking.status, Symbol::new(&env, "completed"));
     assert_eq!(booking.amount_escrowed, 0);
     assert_eq!(contracts.token.balance_of(&contracts.booking.address), 0);
@@ -83,7 +84,7 @@ fn test_refund_flow() {
     // Refund passenger
     contracts.booking.refund_passenger(&booking_id);
 
-    let booking = contracts.booking.get_booking(&booking_id).unwrap();
+    let booking = contracts.booking.get_booking(&actors.passenger, &booking_id).unwrap();
     assert_eq!(booking.status, Symbol::new(&env, "refunded"));
     assert_eq!(booking.amount_escrowed, 0);
 }

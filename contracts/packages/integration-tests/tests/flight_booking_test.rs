@@ -17,7 +17,7 @@ fn test_reserve_seat_happy_path() {
     let seat = Symbol::new(&env, "12A");
     let booking_id = client.reserve_seat(&passenger, &flight_id, &seat, &1_000i128);
 
-    let booking = client.get_booking(&booking_id).unwrap();
+    let booking = client.get_booking(&booking_id, &passenger).unwrap();
     assert_eq!(booking.booking_id, booking_id);
     assert_eq!(booking.flight_id, flight_id);
     assert_eq!(booking.seat, seat);
@@ -67,8 +67,26 @@ fn test_double_booking_different_seat_same_flight_ok() {
     let id_a = client.reserve_seat(&passenger, &flight_id, &seat_a, &1_000);
     let id_b = client.reserve_seat(&passenger, &flight_id, &seat_b, &1_000);
     assert_ne!(id_a, id_b);
-    assert_eq!(client.get_booking(&id_a).unwrap().seat, seat_a);
-    assert_eq!(client.get_booking(&id_b).unwrap().seat, seat_b);
+    assert_eq!(client.get_booking(&id_a, &passenger).unwrap().seat, seat_a);
+    assert_eq!(client.get_booking(&id_b, &passenger).unwrap().seat, seat_b);
+}
+
+#[test]
+#[should_panic(expected = "Not authorized to view booking")]
+fn test_flight_booking_ownership_unauthorized_panics() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let passenger = Address::generate(&env);
+    let stranger = Address::generate(&env);
+    let contract_id = env.register(FlightBookingContract, ());
+    let client = FlightBookingContractClient::new(&env, &contract_id);
+    let booking_id = client.reserve_seat(
+        &passenger,
+        &Symbol::new(&env, "FLOWN"),
+        &Symbol::new(&env, "1A"),
+        &1_000,
+    );
+    client.get_booking(&booking_id, &stranger);
 }
 
 #[test]
@@ -100,7 +118,7 @@ fn test_cancelled_flight_state_is_confirmed_not_cancelled() {
     let flight_id = Symbol::new(&env, "FLCANCEL");
     let seat = Symbol::new(&env, "10A");
     let booking_id = client.reserve_seat(&passenger, &flight_id, &seat, &2_000);
-    let booking = client.get_booking(&booking_id).unwrap();
+    let booking = client.get_booking(&booking_id, &passenger).unwrap();
     assert_eq!(booking.state, flight_booking::BookingState::Confirmed);
     assert_ne!(booking.state, flight_booking::BookingState::Cancelled);
     assert_ne!(booking.state, flight_booking::BookingState::Refunded);
@@ -144,7 +162,7 @@ fn test_non_existent_flight_reserve_succeeds_and_is_retrievable() {
     let unknown_flight = Symbol::new(&env, "UNKNOWN9999");
     let seat = Symbol::new(&env, "9Z");
     let booking_id = client.reserve_seat(&passenger, &unknown_flight, &seat, &750);
-    let booking = client.get_booking(&booking_id).unwrap();
+    let booking = client.get_booking(&booking_id, &passenger).unwrap();
     assert_eq!(booking.flight_id, unknown_flight);
     assert_eq!(booking.seat, seat);
 }
@@ -197,7 +215,7 @@ fn test_capacity_overflow_large_amount_succeeds() {
         &Symbol::new(&env, "1A"),
         &large,
     );
-    let booking = client.get_booking(&booking_id).unwrap();
+    let booking = client.get_booking(&booking_id, &passenger).unwrap();
     assert_eq!(booking.amount, large);
     assert_eq!(booking.escrowed_amount, large);
 }
@@ -255,9 +273,12 @@ fn test_capacity_overflow_many_seats_same_flight() {
     ];
     for seat in seats.iter() {
         let id = client.reserve_seat(&passenger, &flight_id, seat, &500);
-        assert_eq!(client.get_booking(&id).unwrap().flight_id, flight_id);
+        assert_eq!(
+            client.get_booking(&id, &passenger).unwrap().flight_id,
+            flight_id
+        );
     }
-    assert_eq!(client.get_booking(&10).unwrap().booking_id, 10);
+    assert_eq!(client.get_booking(&10, &passenger).unwrap().booking_id, 10);
 }
 
 // ─── Auth failure paths ────────────────────────────────────────────────────
@@ -312,7 +333,7 @@ fn test_deterministic_same_inputs_same_sequence() {
         // capture event before view call (view may affect event buffer)
         let events_len = env.events().all().len();
         assert_eq!(events_len, 1, "BookingCreated event should be emitted");
-        let booking = client.get_booking(&id1).unwrap();
+        let booking = client.get_booking(&id1, &passenger).unwrap();
         assert_eq!(booking.created_at, 1_000);
         assert_eq!(booking.state, flight_booking::BookingState::Confirmed);
     }
@@ -330,11 +351,13 @@ fn test_flight_booking_reconcile_reference_timeout_recovery() {
     let seat = Symbol::new(&env, "15A");
     let request_ref = Symbol::new(&env, "timeout_ref_999");
 
-    let id1 = client.reconcile_booking_reference(&passenger, &flight_id, &seat, &1_500, &request_ref);
-    let booking1 = client.get_booking(&id1).unwrap();
+    let id1 =
+        client.reconcile_booking_reference(&passenger, &flight_id, &seat, &1_500, &request_ref);
+    let booking1 = client.get_booking(&id1, &passenger).unwrap();
     assert_eq!(booking1.seat, seat);
 
     // Retry with same request ref after timeout should return the exact same booking id without duplicate reservation error
-    let id2 = client.reconcile_booking_reference(&passenger, &flight_id, &seat, &1_500, &request_ref);
+    let id2 =
+        client.reconcile_booking_reference(&passenger, &flight_id, &seat, &1_500, &request_ref);
     assert_eq!(id1, id2);
 }

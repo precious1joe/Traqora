@@ -22,7 +22,10 @@ fn test_payment_escrow_flow() {
         &contracts.token.address,
     );
 
-    let booking = contracts.booking.get_booking(&booking_id).unwrap();
+    let booking = contracts
+        .booking
+        .get_booking(&booking_id, &actors.passenger)
+        .unwrap();
     assert_eq!(booking.status, Symbol::new(&env, "pending"));
     assert_eq!(booking.amount_escrowed, 0);
 
@@ -32,7 +35,10 @@ fn test_payment_escrow_flow() {
         .mint(&actors.admin, &actors.passenger, &price);
     contracts.booking.pay_for_booking(&booking_id);
 
-    let booking = contracts.booking.get_booking(&booking_id).unwrap();
+    let booking = contracts
+        .booking
+        .get_booking(&booking_id, &actors.passenger)
+        .unwrap();
     assert_eq!(booking.status, Symbol::new(&env, "confirmed"));
     assert_eq!(booking.amount_escrowed, price);
     assert_eq!(contracts.token.balance_of(&actors.passenger), 0);
@@ -45,7 +51,10 @@ fn test_payment_escrow_flow() {
     // 3. Release escrow to the airline after fulfillment.
     contracts.booking.release_payment_to_airline(&booking_id);
 
-    let booking = contracts.booking.get_booking(&booking_id).unwrap();
+    let booking = contracts
+        .booking
+        .get_booking(&booking_id, &actors.passenger)
+        .unwrap();
     assert_eq!(booking.status, Symbol::new(&env, "completed"));
     assert_eq!(booking.amount_escrowed, 0);
     assert_eq!(contracts.token.balance_of(&contracts.booking.address), 0);
@@ -83,7 +92,63 @@ fn test_refund_flow() {
     // Refund passenger
     contracts.booking.refund_passenger(&booking_id);
 
-    let booking = contracts.booking.get_booking(&booking_id).unwrap();
+    let booking = contracts
+        .booking
+        .get_booking(&booking_id, &actors.passenger)
+        .unwrap();
     assert_eq!(booking.status, Symbol::new(&env, "refunded"));
     assert_eq!(booking.amount_escrowed, 0);
+}
+
+#[test]
+#[should_panic(expected = "Not authorized to view booking")]
+fn test_booking_ownership_unauthorized_viewer_panics() {
+    let env = new_env();
+    let actors = generate_actors(&env);
+    let contracts = register_contracts(&env);
+    initialize_token(&env, &contracts.token, &actors.admin);
+
+    let price = 100_0000000i128;
+    let booking_id = contracts.booking.create_booking(
+        &actors.passenger,
+        &actors.airline,
+        &Symbol::new(&env, "FL123"),
+        &Symbol::new(&env, "JFK"),
+        &Symbol::new(&env, "LAX"),
+        &1704067200,
+        &price,
+        &contracts.token.address,
+    );
+
+    let unauthorized_user = soroban_sdk::Address::generate(&env);
+    contracts
+        .booking
+        .get_booking(&booking_id, &unauthorized_user);
+}
+
+#[test]
+fn test_booking_ownership_airline_viewer_succeeds() {
+    let env = new_env();
+    let actors = generate_actors(&env);
+    let contracts = register_contracts(&env);
+    initialize_token(&env, &contracts.token, &actors.admin);
+
+    let price = 100_0000000i128;
+    let booking_id = contracts.booking.create_booking(
+        &actors.passenger,
+        &actors.airline,
+        &Symbol::new(&env, "FL123"),
+        &Symbol::new(&env, "JFK"),
+        &Symbol::new(&env, "LAX"),
+        &1704067200,
+        &price,
+        &contracts.token.address,
+    );
+
+    let booking = contracts
+        .booking
+        .get_booking(&booking_id, &actors.airline)
+        .unwrap();
+    assert_eq!(booking.booking_id, booking_id);
+    assert_eq!(booking.airline, actors.airline);
 }
